@@ -158,11 +158,12 @@ plus JSON parsing, readable end to end. Three signals:
 - *Context precision.* The fraction of retrieved chunks the judge
   marks relevant. This isolates **retrieval (+ rerank)**.
 
-  A live run on the sample corpus (18 chunks, 10 documents) scored
-  faithfulness 1.00, answer relevancy 1.00 and context precision **0.31**.
-  That is not a retrieval bug: with `RETRIEVAL_TOP_K=5` and most questions
-  answerable from 1 or 2 chunks, at least 3 of 5 chunks must be irrelevant.
-  Growing the corpus from 9 to 18 chunks moved it from 0.26 to 0.31.
+  A live run on the sample corpus (17 chunks, 10 documents, 18 questions)
+  scored faithfulness 1.00, answer relevancy 1.00 (LLM judge) and 0.91
+  (embedding similarity), and context precision **0.24**. That is not a
+  retrieval bug: each question is answerable from 1 or 2 chunks, so with
+  `RETRIEVAL_TOP_K=5` at least 3 of 5 chunks must be irrelevant. The judge
+  found 1 relevant chunk for 14 questions and 2 for the other 4.
   `top_k` is kept as is on purpose, since this illustrates exactly what the
   metric measures, and faithfulness at 1.00 shows generation ignored the
   noise.
