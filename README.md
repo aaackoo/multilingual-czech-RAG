@@ -109,10 +109,11 @@ with the corpus ingested, and are skipped by a plain `pytest`.
 
 **Chunking: character-based, paragraph-first, with overlap.** Text is split
 on paragraphs, then sentences, then raw characters only if still too long,
-targeting about 800 characters with about 150 of overlap. Characters rather
-than tokens, because token boundaries differ per vendor's tokenizer and
-would tie this stage to one provider. Overlap carries whole trailing pieces
-into the next chunk, so it starts on a natural boundary.
+with chunks of at most 800 characters and about 150 of overlap. Characters
+rather than tokens, because token boundaries differ per vendor's tokenizer
+and would tie this stage to one provider. Overlap repeats whole trailing
+pieces when they fit, otherwise the trailing words of the last piece, and
+it counts against the 800, so the chunk size is a hard limit.
 
 **Embeddings: OpenAI `text-embedding-3-small`, via LiteLLM.** It handles Czech
 well. Dedicated multilingual models (`BAAI/bge-m3`, Cohere
@@ -179,9 +180,6 @@ can reduce, though not remove, that risk.
 - BM25 is rebuilt from a full table scan per query; at scale you would use
   a persisted sparse index (Postgres FTS, Elasticsearch, OpenSearch).
 - No Czech stemming or lemmatisation in the sparse path.
-- Overlap is not counted against the chunk size, so very long paragraphs
-  can yield oversized chunks. This does not occur on the sample corpus and
-  is documented by an `xfail` unit test.
 
 ## Environment variables
 
