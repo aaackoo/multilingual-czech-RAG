@@ -1,13 +1,10 @@
 # Multilingual (Czech) RAG
 
-A small, model-agnostic Retrieval-Augmented Generation pipeline over a
-corpus of Czech-language documents: hybrid retrieval (dense + BM25), an
-optional cross-encoder reranking stage, grounded generation with citations,
-and a quality-evaluation script with an LLM-as-judge report.
-
-Built as a portfolio piece — prioritizes a clear, correct, well-explained
-pipeline over scale or features. Every module is commented with *why*, not
-just *what*.
+A small, model-agnostic RAG pipeline over Czech documents: hybrid retrieval
+(dense + BM25), optional cross-encoder reranking, grounded generation with
+citations, and an LLM-as-judge evaluation. It is a portfolio piece that
+favours a clear, well-explained pipeline over scale; every module is
+commented with *why*, not just *what*.
 
 ## Architecture at a glance
 
@@ -39,51 +36,38 @@ just *what*.
    faithfulness / context precision / answer relevancy report
 ```
 
-Every LLM and embedding call in every stage goes through `src/rag/llm.py`,
-which wraps a LiteLLM `Router`. That's the one file you'd touch to swap
-providers.
+All LLM and embedding calls go through `src/rag/llm.py` (a LiteLLM
+`Router`), the only file you touch to swap providers.
 
 ## Setup
 
-Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), Docker.
+Requirements: Python 3.11 (pinned in `.python-version`),
+[uv](https://docs.astral.sh/uv/), Docker.
 
 ```bash
-# 1. Install dependencies (creates .venv, resolves + locks versions)
-uv sync
-
-# 2. Configure environment
-cp .env.example .env
-# edit .env and set OPENAI_API_KEY — this is the only required key.
-# Get one at https://platform.openai.com/api-keys ($5 of credit easily
-# covers this whole demo many times over).
-
-# 3. Start Postgres + pgvector
-docker compose up -d
+uv sync                      # create .venv and install locked dependencies
+cp .env.example .env         # then set OPENAI_API_KEY, the only required key
+docker compose up -d         # start Postgres + pgvector
 ```
 
-The first reranker call downloads `BAAI/bge-reranker-v2-m3` (~1-2GB) from
-HuggingFace on demand — no key required, it's an open-weight model. This
-happens automatically the first time you query with reranking enabled
-(the default).
+$5 of OpenAI credit covers this demo many times over. The first reranked
+query downloads the open-weight `BAAI/bge-reranker-v2-m3` model (1 to 2 GB)
+from HuggingFace; no key is needed.
 
 ## Running the pipeline
 
 ```bash
-# Ingest the sample Czech documents in ./data/raw into pgvector
-uv run python cli.py ingest
-
-# Ask a question from the CLI
+uv run python cli.py ingest                          # load ./data/raw into pgvector
 uv run python cli.py query "Na které řece leží Praha?"
 
-# Or serve the API
-uv run uvicorn api.main:app --reload
+uv run uvicorn api.main:app --reload                 # or serve the API
 curl -X POST localhost:8000/query -H 'Content-Type: application/json' \
   -d '{"question": "Kdo napsal Babičku?"}'
 ```
 
-`POST /query` accepts `{question, top_k?, sources?, rerank?}` and returns
-`{answer, citations}`, where each citation maps to the exact chunk
-(`source`, `chunk_index`, text snippet) the model was grounded on.
+`POST /query` takes `{question, top_k?, sources?, rerank?}` and returns
+`{answer, citations}`; each citation is the exact chunk (`source`,
+`chunk_index`, snippet) the model was given.
 
 ## Running the evaluation
 
@@ -91,163 +75,115 @@ curl -X POST localhost:8000/query -H 'Content-Type: application/json' \
 uv run python evaluate.py
 ```
 
-Runs every question in `data/golden_eval.json` through the full pipeline
-and prints a per-question + averaged report for three metrics (see below),
-plus writes `eval_report.json` with the full detail. Extend the golden set
-by adding more `{question, ground_truth_answer}` pairs to that file.
+Runs every question in `data/golden_eval.json` through the pipeline,
+prints per-question and average scores for the three metrics below, and
+writes details to `eval_report.json`. Extend the golden set by adding
+`{question, ground_truth_answer}` pairs.
 
-**CI gate.** `tests/test_quality.py` is a thin pytest wrapper around the
-same metrics, asserting the aggregate averages stay above baseline
-thresholds — for wiring this eval into CI rather than only reading it as a
-report. It's marked `quality` and excluded from a bare `pytest` run (real
-API calls, ~3 minutes) — run it explicitly:
+## Tests
 
 ```bash
-uv run pytest -m quality -v
+uv run pytest                 # unit tests: offline, a few seconds
+uv run pytest -m quality -v   # quality gate: live pipeline, real API cost
+uv run ruff check . && uv run ruff format --check .
 ```
+
+Unit tests cover chunking, Reciprocal Rank Fusion, tokenisation and prompt
+assembly, with no network, database, API key or model download. The
+quality tests (`tests/test_quality.py`) assert that the evaluation averages
+stay above baseline thresholds. They take about 3 minutes, need Postgres
+with the corpus ingested, and are skipped by a plain `pytest`.
 
 ## Continuous integration
 
 `.github/workflows/ci.yml` has two jobs:
 
-- **`build`** — runs on every push/PR. `uv sync`, a compile-check of every
-  module, and a bare `pytest` run. Free and fast (~30s); touches no
-  external services.
-- **`quality-eval`** — runs the real pipeline: spins up a Postgres +
-  pgvector service container, ingests the sample corpus, and runs
-  `pytest -m quality` against live OpenAI calls. This costs real API money
-  and a few minutes per run, so it's **manually triggered** (`workflow_dispatch`
-  from the Actions tab) rather than on every push — automatically spending
-  API credit on every commit is a decision worth making deliberately, not a
-  CI default. To enable it: add an `OPENAI_API_KEY` secret under the repo's
-  Settings → Secrets and variables → Actions.
+- **`build`** (every push and PR): compile check, ruff, unit tests. About
+  30 seconds, no external services.
+- **`quality-eval`** (manual `workflow_dispatch`): starts Postgres +
+  pgvector, ingests the corpus and runs `pytest -m quality` against live
+  OpenAI. It is manual because every run costs API credit. It needs an
+  `OPENAI_API_KEY` repository secret.
 
 ## Key design decisions
 
-**Chunking — character-based, paragraph-first, with overlap.** Chunks are
-split on paragraph breaks first, falling back to sentences and then raw
-characters only when a unit is still too long, targeting ~800 characters
-with ~150 characters of overlap. Chunking is done by *character* count, not
-tokens, deliberately: token boundaries are tokenizer-specific (OpenAI's
-tokenizer differs from Cohere's or Anthropic's), so token-based chunking
-would silently couple this stage to one vendor — a poor fit for a
-model-agnostic design. Overlap is implemented by carrying the trailing
-pieces of one chunk into the start of the next, so it lands on a natural
-boundary rather than a fixed character offset.
+**Chunking: character-based, paragraph-first, with overlap.** Text is split
+on paragraphs, then sentences, then raw characters only if still too long,
+targeting about 800 characters with about 150 of overlap. Characters rather
+than tokens, because token boundaries differ per vendor's tokenizer and
+would tie this stage to one provider. Overlap carries whole trailing pieces
+into the next chunk, so it starts on a natural boundary.
 
-**Embeddings — OpenAI `text-embedding-3-small`, via LiteLLM.** The corpus
-is Czech, so the embedding model needs real multilingual capability.
-`text-embedding-3-small` was trained on a broad multilingual corpus and
-works well here; it was chosen over dedicated multilingual models like
-`BAAI/bge-m3` or Cohere's `embed-multilingual-v3.0` (both of which likely
-edge it out specifically on non-English retrieval quality) because this
-demo runs on a single API key with no signup friction. If you already have
-a Cohere key, swapping `EMBEDDING_MODEL=cohere/embed-multilingual-v3.0` in
-`.env` (and updating `EMBEDDING_DIM` + the `vector(...)` column in
-`sql/init.sql` to match its 1024 dimensions) is the entire migration — nothing
-else in the codebase references a specific provider.
+**Embeddings: OpenAI `text-embedding-3-small`, via LiteLLM.** It handles Czech
+well. Dedicated multilingual models (`BAAI/bge-m3`, Cohere
+`embed-multilingual-v3.0`) are probably a little better on non-English
+text, but the demo runs on a single API key. Switching to Cohere means
+setting `EMBEDDING_MODEL` and changing `EMBEDDING_DIM` and the `vector(...)`
+column in `sql/init.sql` to 1024; nothing else references a provider.
 
-**Hybrid retrieval — dense (pgvector) + BM25 (`rank_bm25`), fused with
-Reciprocal Rank Fusion.** Dense embedding search is strong at
-semantic/paraphrase matches but can miss exact keyword or name matches that
-don't cluster well in embedding space; BM25 is the opposite. Fusing both is
-cheap and reliably beats either alone. RRF combines the two ranked lists
-using only each item's *rank* (`score = Σ 1/(60 + rank)`), not raw scores —
-dense cosine similarity and BM25 scores live on incomparable, unnormalized
-scales, so RRF sidesteps a score-calibration problem entirely. BM25 runs
-in-memory via `rank_bm25` rather than Postgres full-text search because
-**stock PostgreSQL ships no `czech` text-search configuration** (only e.g.
-english/german/french/...), so `ts_rank` would silently fall back to
-`simple` (no stemming) anyway; `rank_bm25` gives an honest, literal BM25
-score instead of a mismatched substitute. At real scale you'd want a
-persisted sparse index (Postgres FTS, Elasticsearch, OpenSearch) instead of
-rebuilding BM25 from a full table scan per query — noted in `retrieval.py`.
+**Hybrid retrieval: dense (pgvector) + BM25 (`rank_bm25`), fused with
+Reciprocal Rank Fusion.** Dense search handles paraphrase but can miss exact
+names and numbers; BM25 is the opposite, and fusing both usually beats
+either. RRF uses only ranks (`score = Σ 1/(60 + rank)`), so the
+incomparable cosine and BM25 scales never need calibrating. BM25 runs in
+memory because **stock PostgreSQL has no `czech` text-search
+configuration**, so `ts_rank` would fall back to `simple` with no stemming
+anyway.
 
-**Reranking — optional, local cross-encoder (`BAAI/bge-reranker-v2-m3`).**
-This is the two-stage retrieval pattern: stage 3's bi-encoder + BM25 are
-cheap enough to run over the whole corpus because they score the query and
-each document independently, but that independence is also their weakness —
-they can't model fine-grained query–document interactions. A cross-encoder
-scores a (query, document) *pair* jointly in one forward pass, which is far
-more precise but too slow to run over an entire corpus — so it only ever
-reranks the small shortlist stage 3 already narrowed down. It runs locally
-rather than via a rerank API so this optional stage needs zero extra API
-keys; toggle with `RERANK_ENABLED` in `.env`.
+**Reranking: optional local cross-encoder (`BAAI/bge-reranker-v2-m3`).**
+Two-stage retrieval: stage 3 scores query and document independently,
+which is cheap but misses fine-grained interactions. A cross-encoder scores
+each pair jointly, which is more precise but too slow for the whole corpus,
+so it only reranks stage 3's shortlist. It runs locally, so it needs no
+extra API key. Toggle with `RERANK_ENABLED`.
 
-**Generation & citations.** The prompt numbers each retrieved chunk and
-instructs the model to cite the numbers it used, and to say it doesn't know
-rather than invent an answer when the context doesn't contain one. This is
-the actual mechanism that makes an answer "grounded" — groundedness is a
-property of how the prompt asks the model to use retrieved context, not
-something retrieval guarantees on its own. Citations returned to the caller
-map directly to the chunks that were actually sent to the LLM, not a
-post-hoc guess.
+**Generation and citations.** The prompt numbers each chunk, asks the model to
+cite those numbers, and to say it doesn't know when the context has no
+answer. Groundedness comes from the prompt, not from retrieval alone.
+Returned citations are the chunks actually sent to the LLM.
 
-**Model-agnostic routing via LiteLLM.** `src/rag/llm.py` builds a single
-LiteLLM `Router` with named aliases (`generation`, `embedding`, `judge`)
-that the rest of the codebase calls instead of a concrete provider string.
-This demo runs on one OpenAI key, but the file includes a commented example
-of adding a second model under the same alias (e.g. an Anthropic model
-under `generation`) — LiteLLM's Router treats same-named entries as a pool
-and retries the next one on failure automatically. That's the actual
-fallback/routing mechanism; it only needs a second API key in `.env` to
-switch on, not a code change.
+**Model-agnostic routing via LiteLLM.** `src/rag/llm.py` builds one `Router` with
+aliases (`generation`, `embedding`, `judge`) that the code uses instead of
+provider strings. A commented example adds a second model under the same
+alias; the Router pools same-named entries and fails over automatically, so
+fallback needs a second API key, not a code change. The Router is built on
+first use, so importing the package makes no network calls.
 
-**Evaluation — custom lightweight LLM-as-judge, not RAGAS.** Every metric
-here is a short, readable prompt plus JSON parsing you can read end to end,
-rather than a framework whose default integration expects LangChain-wrapped
-models. It measures three complementary things:
+**Evaluation: custom LLM-as-judge, not RAGAS.** Each metric is a short prompt
+plus JSON parsing, readable end to end. Three signals:
 
-- *Faithfulness / groundedness* — the judge breaks the generated answer
-  into individual claims and checks each against the retrieved context.
-  This isolates the **generation** step: a pipeline can retrieve perfectly
-  and still hallucinate on top of good context.
-- *Context precision* — the judge marks each retrieved chunk
-  relevant/irrelevant to the question; the score is the fraction relevant.
-  This isolates the **retrieval (+ rerank)** step, independent of what
-  generation did with the chunks it was given.
+- *Faithfulness / groundedness.* The judge checks each claim in the answer
+  against the retrieved context. This isolates **generation**.
+- *Context precision.* The fraction of retrieved chunks the judge
+  marks relevant. This isolates **retrieval (+ rerank)**.
 
-  On this repo's sample corpus (18 chunks across 10 documents), a live run
-  measured faithfulness = 1.00 and answer relevancy = 1.00, but context
-  precision = **0.31**. That's not a retrieval bug: with `RETRIEVAL_TOP_K=5`
-  and any single question realistically answerable from 1-2 chunks, at
-  least 3-4 of the 5 retrieved chunks are structurally guaranteed to be
-  "irrelevant" regardless of retrieval quality — the metric is correctly
-  detecting that `top_k` is oversized relative to this demo corpus. Doubling
-  the corpus from 4 to 10 documents (9→18 chunks) only moved this from 0.26
-  to 0.31, which itself is a useful data point: context precision converges
-  toward 1.0 as corpus size grows relative to `top_k`, but doing so
-  meaningfully would take a corpus an order of magnitude larger than a demo
-  needs. Faithfulness staying at 1.00 despite that noise confirms generation
-  successfully ignored the irrelevant chunks it was handed. This is kept
-  as-is deliberately (rather than lowering `top_k` to make the number look
-  better) because it's a genuine, explainable illustration of what context
-  precision is for: it would tighten toward 1.0 on its own as the corpus
-  grows relative to `top_k`.
-- *Answer relevancy* — reported as two independent signals side by side: an
-  LLM-judge score for "does the answer address what was asked" (deliberately
-  separate from whether it's *true* — that's faithfulness's job), and a
-  cheap non-LLM sanity check, cosine similarity between the generated
-  answer's embedding and the golden answer's embedding. When the two
-  disagree sharply, that's usually worth a manual look.
+  A live run on the sample corpus (18 chunks, 10 documents) scored
+  faithfulness 1.00, answer relevancy 1.00 and context precision **0.31**.
+  That is not a retrieval bug: with `RETRIEVAL_TOP_K=5` and most questions
+  answerable from 1 or 2 chunks, at least 3 of 5 chunks must be irrelevant.
+  Growing the corpus from 9 to 18 chunks moved it from 0.26 to 0.31.
+  `top_k` is kept as is on purpose, since this illustrates exactly what the
+  metric measures, and faithfulness at 1.00 shows generation ignored the
+  noise.
+- *Answer relevancy.* An LLM-judge score for whether the answer
+  addresses the question (truth is faithfulness's job), next to the cosine
+  similarity of generated and golden answer embeddings. Sharp disagreement
+  is worth a manual look.
 
-Worth saying out loud: using an LLM to judge a pipeline that itself calls an
-LLM risks the judge favoring the generator's own style ("self-preference
-bias"). `EVAL_JUDGE_MODEL` is a separate config knob from `GENERATION_MODEL`
-for exactly this reason — pointing it at a different model reduces (not
-eliminates) that risk.
+An LLM judging an LLM pipeline risks self-preference bias.
+`EVAL_JUDGE_MODEL` is separate from `GENERATION_MODEL` so a different model
+can reduce, though not remove, that risk.
 
 ## Known limitations (by design, for a demo)
 
-- BM25 is rebuilt from a full table scan on every query — fine at this
-  corpus size, not how you'd do it at scale.
-- No Czech-specific stemming/lemmatization in the sparse retrieval path
-  (see the Postgres FTS note above).
-- No automated test suite — correctness is demonstrated by `evaluate.py`
-  and the manual verification steps used while building each stage, not
-  unit tests, to keep this a lean demo rather than a production system.
+- BM25 is rebuilt from a full table scan per query; at scale you would use
+  a persisted sparse index (Postgres FTS, Elasticsearch, OpenSearch).
+- No Czech stemming or lemmatisation in the sparse path.
+- Overlap is not counted against the chunk size, so very long paragraphs
+  can yield oversized chunks. This does not occur on the sample corpus and
+  is documented by an `xfail` unit test.
 
 ## Environment variables
 
-See `.env.example` for the full list with defaults. Only `OPENAI_API_KEY`
-is required to run everything end to end.
+See `.env.example` for all settings and defaults. Only `OPENAI_API_KEY`
+is required.

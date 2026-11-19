@@ -27,6 +27,7 @@ packages = ["src/rag"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.17.5",
 ]
 
 [tool.pytest.ini_options]
@@ -42,3 +43,7 @@ markers = [
 # bare `pytest` invocation so it stays fast/free by default. Run them
 # explicitly with `pytest -m quality` (e.g. in CI).
 addopts = "-m 'not quality'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

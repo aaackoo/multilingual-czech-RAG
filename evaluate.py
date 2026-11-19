@@ -102,7 +102,7 @@ def evaluate_context_precision(question: str, chunks: list[RetrievedChunk]) -> f
             "content": (
                 "You are a relevance judge. Given a QUESTION and numbered CONTEXT "
                 "chunks, decide which chunks contain information relevant to "
-                'answering the question. Respond with ONLY a JSON object: '
+                "answering the question. Respond with ONLY a JSON object: "
                 '{"relevance": [{"index": int, "relevant": bool}]}, one entry per '
                 "chunk."
             ),

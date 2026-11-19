@@ -7,8 +7,8 @@ on:
   workflow_dispatch:  # lets you trigger `quality-eval` manually from the Actions tab
 
 jobs:
-  # Always runs, free and fast (~30s): catches import/syntax errors and any
-  # non-quality tests. Deliberately does NOT touch Postgres, LiteLLM, or the
+  # Always runs, free and fast (~30s): lint, format check and offline unit
+  # tests. Deliberately does NOT touch Postgres, LiteLLM, or the
   # reranker model -- that's what `quality-eval` below is for.
   build:
     runs-on: ubuntu-latest
@@ -24,17 +24,14 @@ jobs:
       - name: Compile-check all modules
         run: uv run python -m py_compile src/rag/*.py api/*.py cli.py evaluate.py
 
-      - name: Fast tests (quality-marked tests excluded by default)
-        run: |
-          uv run pytest -v
-          code=$?
-          # pytest exits 5 ("no tests collected") when every test is
-          # marker-deselected -- true today since the only tests we have are
-          # `quality`-marked (real API calls, run separately below). Treat
-          # that as a pass; still fail on any other non-zero exit code.
-          if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then
-            exit "$code"
-          fi
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Unit tests (quality-marked tests excluded by default)
+        run: uv run pytest -v
 
   # Exercises the real pipeline: Postgres + pgvector, live OpenAI calls, and
   # a ~1-2GB reranker model download. Costs money and minutes, so it's

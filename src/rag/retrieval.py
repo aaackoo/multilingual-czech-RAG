@@ -57,7 +57,9 @@ def _dense_search(
     # ::vector cast is required: psycopg's default adapter for a Python list
     # of floats binds it as `double precision[]`, which pgvector's <=>
     # operator doesn't accept without an explicit cast to its own type.
-    sql = "SELECT id, source, chunk_index, text, 1 - (embedding <=> %s::vector) AS score FROM chunks"
+    sql = (
+        "SELECT id, source, chunk_index, text, 1 - (embedding <=> %s::vector) AS score FROM chunks"
+    )
     params: list = [query_embedding]
     if sources:
         sql += " WHERE source = ANY(%s)"
@@ -68,7 +70,9 @@ def _dense_search(
     with conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
-    return [RetrievedChunk(id=r[0], source=r[1], chunk_index=r[2], text=r[3], score=r[4]) for r in rows]
+    return [
+        RetrievedChunk(id=r[0], source=r[1], chunk_index=r[2], text=r[3], score=r[4]) for r in rows
+    ]
 
 
 def _sparse_search(

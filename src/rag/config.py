@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
 
     # --- Retrieval (stage 3) ---
-    retrieval_top_k: int = 5          # final number of chunks used for generation
-    retrieval_candidates: int = 20    # candidates pulled before reranking
+    retrieval_top_k: int = 5  # final number of chunks used for generation
+    retrieval_candidates: int = 20  # candidates pulled before reranking
 
     # --- Chunking (stage 1) ---
     chunk_size_chars: int = 800

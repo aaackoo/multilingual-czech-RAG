@@ -20,7 +20,7 @@ class QueryRequest(BaseModel):
     question: str
     top_k: int | None = None
     sources: list[str] | None = None  # optional metadata filter, e.g. ["praha.txt"]
-    rerank: bool | None = None        # overrides RERANK_ENABLED for this request
+    rerank: bool | None = None  # overrides RERANK_ENABLED for this request
 
 
 class CitationResponse(BaseModel):
