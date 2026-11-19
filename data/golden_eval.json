@@ -1,0 +1,74 @@
+[
+  {
+    "question": "Na které řece leží Praha?",
+    "ground_truth_answer": "Praha leží na řece Vltavě."
+  },
+  {
+    "question": "Kdo nechal postavit Karlův most?",
+    "ground_truth_answer": "Karlův most nechal postavit král a římský císař Karel IV. ve čtrnáctém století."
+  },
+  {
+    "question": "Které město dalo světu plzeňský ležák a v jakém roce?",
+    "ground_truth_answer": "Plzeňský ležák (pilsner) vznikl v Plzni v roce 1842."
+  },
+  {
+    "question": "Co je to svíčková a s čím se podává?",
+    "ground_truth_answer": "Svíčková na smetaně je hovězí maso v krémové zeleninové omáčce, podávané s houskovým knedlíkem a lžící brusinek."
+  },
+  {
+    "question": "Kdy vzniklo samostatné Československo?",
+    "ground_truth_answer": "Samostatné Československo vzniklo 28. října 1918 po rozpadu Rakouska-Uherska."
+  },
+  {
+    "question": "Kdy se Československo rozdělilo na Českou republiku a Slovenskou republiku?",
+    "ground_truth_answer": "Československo se rozdělilo na dva samostatné státy 1. ledna 1993."
+  },
+  {
+    "question": "Kdo napsal divadelní hru R.U.R. a jaké v ní poprvé zaznělo slovo?",
+    "ground_truth_answer": "Hru R.U.R. napsal Karel Čapek a poprvé se v ní objevilo slovo robot, které vymyslel jeho bratr Josef Čapek."
+  },
+  {
+    "question": "Který pražský rodák napsal romány Proces a Proměna?",
+    "ground_truth_answer": "Proces a Proměnu napsal Franz Kafka, německy píšící pražský rodák."
+  },
+  {
+    "question": "Kdy vstoupila Česká republika do Evropské unie?",
+    "ground_truth_answer": "Česká republika vstoupila do Evropské unie 1. května 2004."
+  },
+  {
+    "question": "Jaká je oficiální měna České republiky?",
+    "ground_truth_answer": "Oficiální měnou České republiky je česká koruna, euro dosud nebylo zavedeno."
+  },
+  {
+    "question": "Jaká je nejvyšší hora České republiky a v jakém pohoří leží?",
+    "ground_truth_answer": "Nejvyšší horou je Sněžka (1603 m), která leží v Krkonoších."
+  },
+  {
+    "question": "Které město je druhé největší v Česku a je hlavním městem Moravy?",
+    "ground_truth_answer": "Druhé největší město je Brno, historické hlavní město Moravy."
+  },
+  {
+    "question": "Za jaký objev získal Jaroslav Heyrovský Nobelovu cenu a v jakém roce?",
+    "ground_truth_answer": "Jaroslav Heyrovský získal v roce 1959 Nobelovu cenu za chemii za vynález polarografie."
+  },
+  {
+    "question": "Co vynalezl Otto Wichterle?",
+    "ground_truth_answer": "Otto Wichterle vynalezl měkké kontaktní čočky z hydrogelu."
+  },
+  {
+    "question": "Který film Miloše Formana získal Oscara za nejlepší film poté, co emigroval do USA?",
+    "ground_truth_answer": "Přelet nad kukaččím hnízdem (1975) a Amadeus (1984) získaly Oscara za nejlepší film."
+  },
+  {
+    "question": "Který symfonický cyklus napsal Bedřich Smetana a jak se jmenuje jeho část o řece?",
+    "ground_truth_answer": "Smetana napsal cyklus Má vlast, jehož část o řece se jmenuje Vltava."
+  },
+  {
+    "question": "Kde a v jakém roce vyhrála česká hokejová reprezentace olympijské zlato?",
+    "ground_truth_answer": "Česká hokejová reprezentace vyhrála olympijské zlato v japonském Naganu v roce 1998."
+  },
+  {
+    "question": "Kolik titulů ve dvouhře vyhrála Martina Navrátilová na Wimbledonu?",
+    "ground_truth_answer": "Martina Navrátilová vyhrála na Wimbledonu rekordních devět titulů ve dvouhře."
+  }
+]

@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:  # lets you trigger `quality-eval` manually from the Actions tab
+
+jobs:
+  # Always runs, free and fast (~30s): catches import/syntax errors and any
+  # non-quality tests. Deliberately does NOT touch Postgres, LiteLLM, or the
+  # reranker model -- that's what `quality-eval` below is for.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync
+
+      - name: Compile-check all modules
+        run: uv run python -m py_compile src/rag/*.py api/*.py cli.py evaluate.py
+
+      - name: Fast tests (quality-marked tests excluded by default)
+        run: |
+          uv run pytest -v
+          code=$?
+          # pytest exits 5 ("no tests collected") when every test is
+          # marker-deselected -- true today since the only tests we have are
+          # `quality`-marked (real API calls, run separately below). Treat
+          # that as a pass; still fail on any other non-zero exit code.
+          if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then
+            exit "$code"
+          fi
+
+  # Exercises the real pipeline: Postgres + pgvector, live OpenAI calls, and
+  # a ~1-2GB reranker model download. Costs money and minutes, so it's
+  # opt-in via manual trigger rather than on every push/PR -- see README.
+  quality-eval:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rag
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: rag
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag -d rag"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync
+
+      - name: Apply pgvector schema
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          PGPASSWORD=rag psql -h localhost -U rag -d rag -f sql/init.sql
+
+      # Reused across runs so the reranker's ~1-2GB of weights are only
+      # downloaded from HuggingFace once, not on every workflow run.
+      - name: Cache reranker model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-bge-reranker-v2-m3
+
+      - name: Ingest sample corpus
+        run: uv run python cli.py ingest
+
+      - name: Run quality gate
+        run: uv run pytest -m quality -v
